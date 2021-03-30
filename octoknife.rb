@@ -2,6 +2,7 @@ require 'curses'
 # TODO add sushi, love
 class Board
   attr_reader :entities
+
   def initialize(win)
     @win = win
     @entities = []
@@ -21,6 +22,10 @@ class Board
     end
     @win.refresh
   end
+
+  # delegates...
+  def maxx; @win.maxx; end
+  def maxy; @win.maxy; end
 
   private
   def update(entity)
@@ -73,11 +78,11 @@ class Octopus
 
   DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
   attr_reader :x, :y, :direction_change_propensity
-  def initialize(x,y, win)
+  def initialize(x,y, board)
     @x,@y, @name = x,y, 'Beavis'
     @y += 1 if @y.zero?
-    # TODO: factor out win from octopus
-    @win = win
+    # TODO: factor out board from octopus
+    @board = board
     @direction_change_propensity = (1..4).to_a.sample * 20
     change_direction
   end
@@ -88,12 +93,12 @@ class Octopus
     when 'UP'
       @y == 1 ? @direction ='DOWN' : @y -=1
     when 'DOWN'
-      @y == @win.maxy - 2 ? @direction = 'UP' : @y += 1
+      @y == @board.maxy - 2 ? @direction = 'UP' : @y += 1
     when 'LEFT'
       @x == 1 ? @direction = 'RIGHT' : @x -=1
     when 'RIGHT'
       # The five here is again because the knife takes an additional character
-      @x >= @win.maxx - 5 ? @direction = 'LEFT' : @x += 1
+      @x >= @board.maxx - 5 ? @direction = 'LEFT' : @x += 1
     end
   end
 
