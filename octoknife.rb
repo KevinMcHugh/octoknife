@@ -1,45 +1,88 @@
 require 'curses'
 # TODO add sushi, love
-# class Board
-#   attr_reader :entities
-#   def initialize
-#     @entities = []
-#   end
-#   def add_entity(entity)
-#     @entities << entity
-#   end
+class Board
+  attr_reader :entities
+  def initialize(win)
+    @win = win
+    @entities = []
+  end
 
-#   def render
+  def add_entity(entity)
+    @entities << entity
+    borrow_cursor do |win|
+      win.setpos(entity.y, entity.x)
+      win.addstr(entity.avatar)
+    end
+  end
 
-#   end
-# end
+  def render_step
+    entities.each do |entity|
+      update(entity)
+    end
+    @win.refresh
+  end
 
-module DOneHundred
+  private
+  def update(entity)
+    borrow_cursor do |win|
+      # handle clearing old position
+      win.setpos(entity.y,entity.x)
+      win.addstr(entity.inverse_avatar)
+
+      entity.update
+
+      win.setpos(entity.y, entity.x)
+      win.addstr(entity.avatar)
+    end
+  end
+
+  def borrow_cursor
+    old_x, old_y = @win.curx, @win.cury
+    yield @win
+    @win.setpos(old_y, old_x)
+  end
+end
+
+module Chance
   def d100_beats?(check)
     rand(100) > check
   end
 end
 
-class Octopus
-  include DOneHundred
+class StaticEntity
+  def initialize(x, y, avatar, win)
+    @x, @y, @avatar, @win = x, y, avatar, win
+    @present = true
+  end
 
-  def self.avatar; '🐙🔪'; end
+  def draw
+
+  end
+
+  def consume
+    @present = false
+  end
+end
+
+class Octopus
+  include Chance
+
+  def avatar; '🐙🔪'; end
   # TODO - I want not length but like, utf8 length or something - hence the doubling here
-  def self.inverse_avatar; " " * 2 * avatar.length; end
+  def inverse_avatar; " " * 2 * avatar.length; end
 
   DIRECTIONS = ['UP', 'DOWN', 'LEFT', 'RIGHT']
   attr_reader :x, :y, :direction_change_propensity
   def initialize(x,y, win)
     @x,@y, @name = x,y, 'Beavis'
     @y += 1 if @y.zero?
+    # TODO: factor out win from octopus
     @win = win
     @direction_change_propensity = (1..4).to_a.sample * 20
     change_direction
-    update_position
   end
 
-  def move
-    clearable_y, clearable_x = @y, @x
+  def update
     change_direction if d100_beats?(direction_change_propensity)
     case @direction
     when 'UP'
@@ -49,28 +92,16 @@ class Octopus
     when 'LEFT'
       @x == 1 ? @direction = 'RIGHT' : @x -=1
     when 'RIGHT'
-      # The four here is again because the knife takes an additional character
+      # The five here is again because the knife takes an additional character
       @x >= @win.maxx - 5 ? @direction = 'LEFT' : @x += 1
     end
-    update_position(clearable_y, clearable_x)
   end
+
   def to_s
     "<Octopus @x=#{@x} @y=#{@y}>"
   end
 
   private
-  def update_position(clearable_y=nil, clearable_x=nil)
-    return if clearable_y == @y && clearable_x == @x
-    old_x, old_y = @win.curx, @win.cury
-    if clearable_y && clearable_x
-      @win.setpos(clearable_y, clearable_x)
-      @win.addstr(self.class.inverse_avatar)
-    end
-    @win.setpos(@y, @x)
-    @win.addstr(self.class.avatar)
-    @win.setpos(old_y, old_x)
-  end
-
   def change_direction
     @direction = DIRECTIONS.sample
   end
@@ -85,7 +116,8 @@ end
 def render_screen
   Curses.init_screen
   win = Curses.stdscr
-  octos = 10.times.map { |i| Octopus.new(rand(win.maxx - 4), rand(win.maxy - 1), win) }
+  board = Board.new(win)
+  octos = 10.times.map { |i| board.add_entity(Octopus.new(rand(win.maxx - 4), rand(win.maxy - 1), win)) }
 
   begin
     Curses.curs_set(0)
@@ -107,8 +139,7 @@ def render_screen
 
     loop do
       return if key_listener[:key] == 'q'
-      octos.map(&:move)
-      win.refresh
+      board.render_step
       sleep(1.0/10)
     end
   ensure
