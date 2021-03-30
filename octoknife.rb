@@ -31,6 +31,7 @@ class Octopus
   attr_reader :x, :y, :direction_change_propensity
   def initialize(x,y, win)
     @x,@y, @name = x,y, 'Beavis'
+    @y += 1 if @y.zero?
     @win = win
     @direction_change_propensity = (1..4).to_a.sample * 20
     change_direction
@@ -49,9 +50,12 @@ class Octopus
       @x == 1 ? @direction = 'RIGHT' : @x -=1
     when 'RIGHT'
       # The four here is again because the knife takes an additional character
-      @x == @win.maxx - 4 ? @direction = 'LEFT' : @x += 1
+      @x >= @win.maxx - 5 ? @direction = 'LEFT' : @x += 1
     end
     update_position(clearable_y, clearable_x)
+  end
+  def to_s
+    "<Octopus @x=#{@x} @y=#{@y}>"
   end
 
   private
@@ -80,9 +84,10 @@ end
 
 def render_screen
   Curses.init_screen
+  win = Curses.stdscr
+  octos = 10.times.map { |i| Octopus.new(rand(win.maxx - 4), rand(win.maxy - 1), win) }
 
   begin
-    win = Curses.stdscr
     Curses.curs_set(0)
     Curses.start_color
     Curses.noecho
@@ -96,21 +101,22 @@ def render_screen
     center_on_line(win, y, "WELCOME TO OCTOPUS KNIFE")
     center_on_line(win, y+1, "press q to leave...if you dare")
 
-    octos = 10.times.map { |i| Octopus.new(rand(win.maxx), rand(win.maxy), win) }
     key_listener = Thread.new do
       loop {Thread.current[:key] = win.getch}
     end
 
-    (win.maxy * 2).times do
+    loop do
       return if key_listener[:key] == 'q'
       octos.map(&:move)
       win.refresh
       sleep(1.0/10)
     end
-    sleep 10
   ensure
+    maxx = win.maxx
     Curses.close_screen
     Curses.curs_set(1)
+    puts maxx
+    puts octos.map(&:to_s)
   end
 end
 
